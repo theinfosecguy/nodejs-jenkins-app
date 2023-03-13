@@ -1,0 +1,58 @@
+def secrets = [
+  [
+    path: 'secret/jenkins/my-secret',
+    engineVersion: 2,
+    secretValues: [
+      [envVar: 'PORT', vaultKey: 'PORT']
+    ]
+  ],
+]
+
+def configuration = [
+  vaultUrl: 'http://172.31.36.198:8082',
+  vaultCredentialId: 'ccc2cf0c-1b1a-40a1-a7bd-81ef1dc764f1',
+  engineVersion: 2
+]
+
+pipeline {
+  environment {
+    registry = 'theinfosecguy/nodejs-jenkins-app'
+    registryCredential = 'dockerhubcredentials'
+    dockerImage = ''
+  }
+
+  agent any
+  stages {
+    stage('Cloning our Git') {
+      steps {
+        git branch: 'main', credentialsId: '135a3390-e563-49fa-aa56-dd108558e492', url: 'git@github.com:theinfosecguy/nodejs-jenkins-app.git'
+      }
+    }
+
+    stage('Building Docker Image') {
+      steps {
+        script {
+          withVault([configuration: configuration, vaultSecrets: secrets]) {
+            dockerImage = docker.build("$registry:$BUILD_NUMBER", "--build-arg PORT=${env.PORT} .")
+          }
+        }
+      }
+    }
+
+    stage('Deploying Docker Image to Dockerhub') {
+      steps {
+        script {
+          docker.withRegistry('', registryCredential) {
+            dockerImage.push()
+          }
+        }
+      }
+    }
+
+    stage('Cleaning Up') {
+      steps {
+        sh "docker rmi --force $registry:$BUILD_NUMBER"
+      }
+    }
+  }
+}

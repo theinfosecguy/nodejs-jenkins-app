@@ -1,0 +1,42 @@
+pipeline {
+  environment {
+    registry = 'theinfosecguy/nodejs-jenkins-app'
+    registryCredential = 'dockerhubcredentials'
+    dockerImage = ''
+  }
+
+  agent any
+  stages {
+    stage('Cloning our Git') {
+      steps {
+        git branch: 'main', credentialsId: '135a3390-e563-49fa-aa56-dd108558e492', url: 'git@github.com:theinfosecguy/nodejs-jenkins-app.git'
+      }
+    }
+
+    stage('Building Docker Image') {
+      steps {
+        script {
+          withCredentials([string(credentialsId: 'PORT', variable: 'PORT')]) {
+            dockerImage = docker.build("$registry:$BUILD_NUMBER", "--build-arg PORT=$PORT .")
+          }
+        }
+      }
+    }
+
+    stage('Deploying Docker Image to Dockerhub') {
+      steps {
+        script {
+          docker.withRegistry('', registryCredential) {
+            dockerImage.push()
+          }
+        }
+      }
+    }
+
+    stage('Cleaning Up') {
+      steps {
+        sh "docker rmi --force $registry:$BUILD_NUMBER"
+      }
+    }
+  }
+}
